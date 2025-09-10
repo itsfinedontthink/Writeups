@@ -1,0 +1,83 @@
+📝 Brooklyn Nine Nine – Write-Up
+1. Reconnaissance
+
+Target IP: 10.201.66.62
+
+Open Ports:
+
+21/tcp – FTP (vsftpd 3.0.3)
+
+80/tcp – HTTP (custom web page with background image brooklyn99.jpg)
+
+Findings:
+
+Page source contained the hint: “have you ever heard of steganography”.
+
+Background image brooklyn99.jpg looked suspicious.
+
+2. Enumeration
+FTP
+
+Anonymous login allowed.
+
+Discovered file: note_to_jake.txt
+
+Contents:
+
+From Amy,
+
+Jake please change your password. It is too weak and Holt will be mad if someone hacks into the nine nine
+
+
+💡 Clue: User jake with a weak password.
+
+3. Exploitation
+
+Tried logging in as jake → password was weak / found via brute force.
+
+Successfully gained access as user jake.
+
+4. Privilege Escalation
+
+Checked sudo -l:
+
+User jake may run the following commands on brookly_nine_nine:
+    (ALL) NOPASSWD: /usr/bin/less
+
+
+Exploited less to spawn root shell:
+
+sudo less /etc/passwd
+!bash
+
+
+Confirmed root:
+
+whoami
+# root
+
+5. Root Flag
+
+Navigated to /root/flag.txt (example, replace with real flag location).
+
+Retrieved the root flag. 🎉
+
+6. Lessons Learned
+
+Weak passwords → always exploitable via brute force.
+
+Anonymous FTP is dangerous → leads to information disclosure.
+
+Misconfigured sudo (NOPASSWD for interactive programs like less, vim, nano) → instant root escalation.
+
+⚡ Pro tip: Keep this template handy. For every box, just fill in:
+
+Ports & services
+
+Enumerated findings
+
+Exploitation path
+
+Privesc method
+
+Flags & lessons
